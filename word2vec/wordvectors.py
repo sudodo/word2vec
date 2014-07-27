@@ -105,6 +105,12 @@ class WordVectors(object):
             ans[word] = best
 
         return ans
+    
+    def cosine_between(self, word1, word2):
+        vec1 = self.get_vector(word1)
+        vec2 = self.get_vector(word2)
+        met = np.dot(vec1, vec2)
+        return met
 
     def _cosine(self, word, n=10):
         """
