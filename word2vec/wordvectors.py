@@ -1,4 +1,5 @@
 import numpy as np
+import time
 try:
     from sklearn.externals import joblib
 except:
@@ -58,12 +59,14 @@ class WordVectors(object):
     def __getitem__(self, word):
         return self.get_vector(word)
 
-    def generate_response(self, indexes, metric):
+    def generate_response(self, indexes, metric, exclude=''):
         """
         Generates a response as a list of tuples based on the indexes
         Each tuple is: (vocab[i], metric[i])
         """
-        return [(word, sim) for word, sim in zip(self.vocab[indexes], metric[indexes])]
+        if isinstance(exclude, basestring):
+            exclude = [exclude]
+        return [(word, sim) for word, sim in zip(self.vocab[indexes], metric[indexes]) if word not in exclude]
 
     def cosine(self, words, n=10):
         """
@@ -92,20 +95,39 @@ class WordVectors(object):
                    ('yellow', 0.94640807944950878)]
         }
         """
+        start_time = time.time()
+        print("processing w2v.cosine")
         if isinstance(words, basestring):
             words = [words]
 
+        tmp_words = []
+        for index, word in enumerate(words):
+            if index % 500 == 0:
+                print("%d," % index)
+            if word in self.vocab:
+                tmp_words.append(word)
+            else:
+                pass
+                # print("%s is NOT in word2vec.model.vocabulary" % word)
+        words = tmp_words
+        print("Finish removing out-of-vocabulary words: %f min" % (time.time() - start_time)/60.0)
+
+        print("hoge")
         targets = np.vstack((self.get_vector(word) for word in words))
+        print("fuga")
         metrics = np.dot(self.l2norm, targets.T)
 
         ans = {}
         for col, word in enumerate(words):
-            best = np.argsort(metrics[:, col])[::-1][1:n + 1]
-            best = self.generate_response(best, metrics[:, col])
+            if col % 500 == 0:
+                print("%d," % col)
+            best = np.argsort(metrics[:, col])[::-1][:n + 1]
+            best = self.generate_response(best, metrics[:, col], exclude=word)
             ans[word] = best
 
         return ans
-    
+
+
     def cosine_between(self, word1, word2):
         vec1 = self.get_vector(word1)
         vec2 = self.get_vector(word2)
@@ -134,9 +156,9 @@ class WordVectors(object):
         metric = np.empty(self.vocab.shape)
         for idx, vector in enumerate(self.vectors):
             metric[idx] = distance.cosine(target_vec, vector)
-        best = metric.argsort()[1:n + 1]
+        best = metric.argsort()[:n + 1]
 
-        return self.generate_response(best, metric)
+        return self.generate_response(best, metric, exclude=word)
 
     def analogy(self, pos, neg, n=10):
         """
@@ -168,8 +190,8 @@ class WordVectors(object):
         mean = np.array(mean).mean(axis=0)
 
         similarities = np.dot(self.l2norm, mean)
-        best = similarities.argsort()[::-1][1:n + len(words) - 1]
-        return self.generate_response(best, similarities)
+        best = similarities.argsort()[::-1][:n + len(words) - 1]
+        return self.generate_response(best, similarities, exclude=words)
 
     def to_mmap(self, fname):
         if not joblib:
